@@ -4,10 +4,38 @@ from geopy.geocoders import Nominatim
 import time
 
 # -----------------------------
+# Create the Dictionary
+# Default Transport Types
+# ----------------------------
+
+TRANSPORT_TYPES = {
+    "Walking": "🚶",
+    "Bicycle": "🚲",
+    "Motorbike": "🏍️",
+    "Car": "🚗",
+    "Bus": "🚌",
+    "Train": "🚆",
+    "Plane": "✈️",
+    "Helicopter": "🚁",
+    "Drone": "🛸",
+    "Ship": "🚢",
+    "Boat": "⛵",
+    "Swimming": "🏊",
+    "Horse": "🐎",
+    "Camel": "🐪",
+    "Donkey": "🫏"
+}
+
+
+
+
+# -----------------------------
 # Read trip
 # -----------------------------
 
 trip = pd.read_csv("data/trip.csv")
+
+transports = trip["Transport"].tolist()
 
 locations = [trip.iloc[0]["From"]]
 
@@ -96,6 +124,14 @@ for segment in range(len(locations) - 1):
             + [locations[segment + 1]]
         )
 
+        transport = transports[segment]
+
+        transport_icon = TRANSPORT_TYPES.get(
+            transport,
+            "❓"
+        )
+
+
         frames.append(
             go.Frame(
                 data=[
@@ -115,6 +151,13 @@ for segment in range(len(locations) - 1):
                         )
                     )
                 ],
+                layout=go.Layout(
+                    title=(
+                        f"{transport_icon} "
+                        f"{locations[segment]} → "
+                        f"{locations[segment + 1]}"
+                    )
+                ),
                 name=str(frame_number)
             )
         )
@@ -170,7 +213,7 @@ fig.update_layout(
                         None,
                         {
                             "frame": {
-                                "duration": 150,
+                                "duration": 100,
                                 "redraw": True
                             },
                             "fromcurrent": True
