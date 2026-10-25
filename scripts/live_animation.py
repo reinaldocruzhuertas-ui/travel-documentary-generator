@@ -4,9 +4,8 @@ from geopy.geocoders import Nominatim
 import time
 
 # -----------------------------
-# Create the Dictionary
-# Default Transport Types
-# ----------------------------
+# Transport Types
+# -----------------------------
 
 TRANSPORT_TYPES = {
     "Walking": "🚶",
@@ -26,21 +25,18 @@ TRANSPORT_TYPES = {
     "Donkey": "🫏"
 }
 
-
-
-
 # -----------------------------
 # Read trip
 # -----------------------------
 
 trip = pd.read_csv("data/trip.csv")
 
-transports = trip["Transport"].tolist()
-
 locations = [trip.iloc[0]["From"]]
 
 for _, row in trip.iterrows():
     locations.append(row["To"])
+
+transports = trip["Transport"].tolist()
 
 # -----------------------------
 # Geocode
@@ -58,7 +54,9 @@ print("Getting coordinates...")
 
 for city in locations:
 
-    location = geo.geocode(f"{city} Australia")
+    location = geo.geocode(
+        f"{city} Australia"
+    )
 
     latitudes.append(location.latitude)
     longitudes.append(location.longitude)
@@ -72,7 +70,7 @@ for city in locations:
     time.sleep(1)
 
 # -----------------------------
-# Calculate map bounds
+# Map Bounds
 # -----------------------------
 
 padding_lat = 1
@@ -85,7 +83,7 @@ min_lon = min(longitudes) - padding_lon
 max_lon = max(longitudes) + padding_lon
 
 # -----------------------------
-# Create animation frames
+# Create Animation Frames
 # -----------------------------
 
 frames = []
@@ -102,6 +100,13 @@ for segment in range(len(locations) - 1):
     end_lat = latitudes[segment + 1]
     end_lon = longitudes[segment + 1]
 
+    transport = transports[segment]
+
+    transport_icon = TRANSPORT_TYPES.get(
+        transport,
+        "❓"
+    )
+
     for step in range(steps_per_segment + 1):
 
         progress = step / steps_per_segment
@@ -116,25 +121,29 @@ for segment in range(len(locations) - 1):
             + progress * (end_lon - start_lon)
         )
 
-        route_lats = latitudes[:segment + 1] + [current_lat]
-        route_lons = longitudes[:segment + 1] + [current_lon]
+        route_lats = (
+            latitudes[:segment + 1]
+            + [current_lat]
+        )
+
+        route_lons = (
+            longitudes[:segment + 1]
+            + [current_lon]
+        )
 
         city_labels = (
             locations[:segment + 1]
             + [locations[segment + 1]]
         )
 
-        transport = transports[segment]
-
-        transport_icon = TRANSPORT_TYPES.get(
-            transport,
-            "❓"
-        )
-
-
         frames.append(
+
             go.Frame(
+
                 data=[
+
+                    # Route
+
                     go.Scattergeo(
                         lon=route_lons,
                         lat=route_lats,
@@ -149,8 +158,21 @@ for segment in range(len(locations) - 1):
                             size=8,
                             color="royalblue"
                         )
+                    ),
+
+                    # Moving Transport
+
+                    go.Scattergeo(
+                        lon=[current_lon],
+                        lat=[current_lat],
+                        mode="text",
+                        text=[transport_icon],
+                        textfont=dict(
+                            size=28
+                        )
                     )
                 ],
+
                 layout=go.Layout(
                     title=(
                         f"{transport_icon} "
@@ -158,6 +180,7 @@ for segment in range(len(locations) - 1):
                         f"{locations[segment + 1]}"
                     )
                 ),
+
                 name=str(frame_number)
             )
         )
@@ -168,20 +191,47 @@ for segment in range(len(locations) - 1):
 # Initial Figure
 # -----------------------------
 
+initial_icon = TRANSPORT_TYPES.get(
+    transports[0],
+    "❓"
+)
+
 fig = go.Figure(
+
     data=[
+
+        # Route Trace
+
         go.Scattergeo(
             lon=[longitudes[0]],
             lat=[latitudes[0]],
-            mode="markers+text",
+            mode="lines+markers+text",
             text=[locations[0]],
             textposition="top center",
+            line=dict(
+                width=4,
+                color="royalblue"
+            ),
             marker=dict(
-                size=10,
+                size=8,
                 color="royalblue"
             )
+        ),
+
+        # Transport Trace
+
+        go.Scattergeo(
+            lon=[longitudes[0]],
+            lat=[latitudes[0]],
+            mode="text",
+            text=[initial_icon],
+            textfont=dict(
+                size=28
+            )
         )
+
     ],
+
     frames=frames
 )
 
@@ -190,7 +240,9 @@ fig = go.Figure(
 # -----------------------------
 
 fig.update_layout(
-    title="Travel Documentary Generator V0.3 Gamma",
+
+    title="Travel Documentary Generator V0.4 Gamma",
+
     geo=dict(
         projection_type="natural earth",
         showland=True,
@@ -202,26 +254,35 @@ fig.update_layout(
             range=[min_lon, max_lon]
         )
     ),
+
     updatemenus=[
+
         dict(
             type="buttons",
+
             buttons=[
+
                 dict(
                     label="▶ Play",
+
                     method="animate",
+
                     args=[
                         None,
                         {
                             "frame": {
-                                "duration": 100,
+                                "duration": 150,
                                 "redraw": True
                             },
+
                             "fromcurrent": True
                         }
                     ]
                 )
+
             ]
         )
+
     ]
 )
 
