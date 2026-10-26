@@ -85,8 +85,13 @@ for segment in range(len(locations) - 1):
     title_text = "<br>".join(title_lines)
 
     # FIX #2: emojis of completed legs (parked at their endpoints)
-    completed_lats = [latitudes[i + 1] for i in range(segment)]
-    completed_lons = [longitudes[i + 1] for i in range(segment)]
+    # completed_lats = [latitudes[i + 1] for i in range(segment)]
+    # completed_lons = [longitudes[i + 1] for i in range(segment)]
+
+    completed_lats = [latitudes[i + 1] + (i * 0.03) for i in range(segment)]
+    completed_lons = [longitudes[i + 1] + (i * 0.03) for i in range(segment)]
+
+
     completed_icons = [
         TRANSPORT_TYPES.get(transports[i], "❓") for i in range(segment)
     ]
@@ -185,6 +190,8 @@ fig.update_layout(
     updatemenus=[  # ✅ plural — this was the typo
         dict(
             type="buttons",
+            x=0.02,
+            y=0.75,            
             buttons=[
                 dict(
                     label="▶ Play",

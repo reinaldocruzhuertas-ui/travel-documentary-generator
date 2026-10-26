@@ -1,3 +1,9 @@
 Date,From,To,Transport
 01-Oct-2026,Sydney,Canberra,Car
 02-Oct-2026,Canberra,Melbourne,Train
+03-Oct-2026,Melbourne,Devonport,Ship
+04-Oct-2026,Devonport,Hobart,Bus
+05-Oct-2026,Hobart,Strahan,Car
+06-Oct-2026,Strahan,Devonport,Car
+07-Oct-2026,Devonport,Sydney,Plane
+
