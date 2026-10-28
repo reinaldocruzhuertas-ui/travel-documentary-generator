@@ -1,5 +1,6 @@
 import streamlit as st
 import folium
+import pandas as pd
 
 from geopy.geocoders import Nominatim
 from streamlit_folium import st_folium
@@ -12,9 +13,6 @@ st.set_page_config(
     page_title="Journey Builder",
     layout="wide"
 )
-
-st.title("🌏 Travel Documentary Generator")
-st.subheader("Journey Builder V0.5 Alpha")
 
 # -------------------------------------------------
 # Session State
@@ -41,90 +39,141 @@ if "latitude" not in st.session_state:
 if "longitude" not in st.session_state:
     st.session_state.longitude = ""
 
-# -------------------------------------------------
-# Search
-# -------------------------------------------------
-
-search_text = st.text_input(
-    "Search Location",
-    value=""
-)
+if "journey_points" not in st.session_state:
+    st.session_state.journey_points = []
 
 # -------------------------------------------------
-# Locate Button
+# Layout 25% / 75%
 # -------------------------------------------------
 
-if st.button("Locate"):
+left_col, right_col = st.columns([1, 3])
 
-    geo = Nominatim(
-        user_agent="travel_documentary_generator",
-        timeout=10
+# =================================================
+# LEFT SIDE
+# =================================================
+
+with left_col:
+
+    st.title("🌏 Journey Builder")
+
+    st.subheader("Search Location")
+
+    search_text = st.text_input(
+        "",
+        placeholder="Sydney Opera House"
     )
 
-    location = geo.geocode(search_text)
+    if st.button("Locate"):
 
-    if location:
+        geo = Nominatim(
+            user_agent="travel_documentary_generator",
+            timeout=10
+        )
 
-        st.session_state.location_name = location.address
+        location = geo.geocode(search_text)
 
-        st.session_state.latitude = location.latitude
-        st.session_state.longitude = location.longitude
+        if location:
 
-        st.session_state.map_lat = location.latitude
-        st.session_state.map_lon = location.longitude
+            st.session_state.location_name = search_text
 
-        st.session_state.zoom_level = 15
+            st.session_state.latitude = location.latitude
+            st.session_state.longitude = location.longitude
 
-        st.session_state.marker = (
-            location.latitude,
-            location.longitude
+            st.session_state.map_lat = location.latitude
+            st.session_state.map_lon = location.longitude
+
+            st.session_state.zoom_level = 15
+
+            st.session_state.marker = (
+                location.latitude,
+                location.longitude
+            )
+
+        else:
+
+            st.error(
+                "Location not found"
+            )
+
+    st.markdown("---")
+
+    st.subheader("Journey Point")
+
+    point_name = st.text_input(
+        "Point Name",
+        value=st.session_state.location_name
+    )
+
+    st.write(
+        f"Coordinates: "
+        f"({st.session_state.latitude}, "
+        f"{st.session_state.longitude})"
+    )
+
+    if st.button("Add Journey Point"):
+
+        if (
+            point_name
+            and st.session_state.latitude != ""
+        ):
+
+            st.session_state.journey_points.append(
+                {
+                    "Point Name": point_name,
+                    "Coordinates":
+                        f"({st.session_state.latitude}, "
+                        f"{st.session_state.longitude})"
+                }
+            )
+
+            st.success(
+                f"Added: {point_name}"
+            )
+
+    st.markdown("---")
+
+    st.subheader("Journey Points")
+
+    if st.session_state.journey_points:
+
+        points_df = pd.DataFrame(
+            st.session_state.journey_points
+        )
+
+        st.dataframe(
+            points_df,
+            use_container_width=True
         )
 
     else:
 
-        st.error("Location not found")
+        st.info(
+            "No Journey Points added yet."
+        )
 
-# -------------------------------------------------
-# Selected Location
-# -------------------------------------------------
+# =================================================
+# RIGHT SIDE
+# =================================================
 
-st.markdown("---")
+with right_col:
 
-st.subheader("Selected Location")
+    m = folium.Map(
+        location=[
+            st.session_state.map_lat,
+            st.session_state.map_lon
+        ],
+        zoom_start=st.session_state.zoom_level
+    )
 
-st.write(
-    f"**Name:** {st.session_state.location_name}"
-)
+    if st.session_state.marker:
 
-st.write(
-    f"**Latitude:** {st.session_state.latitude}"
-)
+        folium.Marker(
+            st.session_state.marker,
+            tooltip=st.session_state.location_name
+        ).add_to(m)
 
-st.write(
-    f"**Longitude:** {st.session_state.longitude}"
-)
-
-# -------------------------------------------------
-# Map
-# -------------------------------------------------
-
-m = folium.Map(
-    location=[
-        st.session_state.map_lat,
-        st.session_state.map_lon
-    ],
-    zoom_start=st.session_state.zoom_level
-)
-
-if st.session_state.marker:
-
-    folium.Marker(
-        st.session_state.marker,
-        tooltip=st.session_state.location_name
-    ).add_to(m)
-
-st_folium(
-    m,
-    width=1400,
-    height=700
-)
+    st_folium(
+        m,
+        width=1400,
+        height=800
+    )
