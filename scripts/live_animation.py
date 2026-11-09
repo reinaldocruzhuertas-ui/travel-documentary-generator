@@ -173,6 +173,13 @@ fig = go.Figure(
 # Layout
 # -----------------------------
 fig.update_layout(
+    # --- size / viewport ---
+    width=1400,
+    height=900,
+    autosize=True,
+    margin=dict(l=0, r=0, t=40, b=0),
+
+    # --- title ---
     title=dict(
         text=initial_title,
         x=0.02,
@@ -180,18 +187,23 @@ fig.update_layout(
         xanchor="left",
         yanchor="top",
     ),
+
+    # --- geo ---
     geo=dict(
         projection_type="natural earth",
         showland=True,
         showcountries=True,
         lataxis=dict(range=[min_lat, max_lat]),
         lonaxis=dict(range=[min_lon, max_lon]),
+        domain=dict(x=[0, 1], y=[0, 1]),   # <- fills the whole plot area
     ),
-    updatemenus=[  # ✅ plural — this was the typo
+
+    # --- controls ---
+    updatemenus=[
         dict(
             type="buttons",
             x=0.02,
-            y=0.75,            
+            y=0.75,
             buttons=[
                 dict(
                     label="▶ Play",

@@ -68,6 +68,12 @@ if "journey_points" not in st.session_state:
 if "trip_rows" not in st.session_state:
     st.session_state.trip_rows = []
 
+if "clicked_lat" not in st.session_state:
+    st.session_state.clicked_lat = None
+
+if "clicked_lon" not in st.session_state:
+    st.session_state.clicked_lon = None    
+
 # -------------------------------------------------
 # Layout 25% / 75%
 # -------------------------------------------------
@@ -240,6 +246,30 @@ with left_col:
     # st.markdown("---")
 
     # ==========================================
+    # MAP CLICK
+    # ==========================================
+
+    st.markdown("##### Last Map Click")
+
+    if (
+        st.session_state.clicked_lat
+        and
+        st.session_state.clicked_lon
+    ):
+
+        st.success(
+            f"({st.session_state.clicked_lat:.6f}, "
+            f"{st.session_state.clicked_lon:.6f})"
+        )
+
+    else:
+
+        st.info(
+            "Click anywhere on the map to select a location."
+        )
+
+
+    # ==========================================
     # JOURNEY TABLE
     # ==========================================
 
@@ -281,6 +311,18 @@ with left_col:
 
 with right_col:
 
+    apply_click_to = st.radio(
+        "Apply Map Click To",
+        [
+            "None",
+            "Start Point",
+            "End Point"
+        ],
+        index=0,
+        horizontal=True
+    )
+
+
     m = folium.Map(
         location=[
             st.session_state.map_lat,
@@ -296,8 +338,89 @@ with right_col:
             tooltip=st.session_state.location_name
         ).add_to(m)
 
-    st_folium(
+    map_data = st_folium(
         m,
         width=None,
-        height=1400
+        height=1400,
+        returned_objects=["last_clicked"]
     )
+
+    # st.json(map_data)
+
+if (
+    map_data
+    and map_data.get("last_clicked")
+):
+
+    st.session_state.clicked_lat = (
+        map_data["last_clicked"]["lat"]
+    )
+
+    st.session_state.clicked_lon = (
+        map_data["last_clicked"]["lng"]
+    )
+
+
+# ---------------------------------
+# APPLY LAST CLICK
+# ---------------------------------
+
+if (
+    use_map_click
+    and st.session_state.clicked_lat
+    and st.session_state.clicked_lon
+):
+
+    if apply_click_to == "Start Point":
+
+        st.session_state.start_lat = (
+            st.session_state.clicked_lat
+        )
+
+        st.session_state.start_lon = (
+            st.session_state.clicked_lon
+        )
+
+        st.session_state.start_name = (
+            f"Map Point "
+            f"({st.session_state.clicked_lat:.4f}, "
+            f"{st.session_state.clicked_lon:.4f})"
+        )
+
+        st.success(
+            "Applied to Start Point"
+        )
+
+    elif apply_click_to == "End Point":
+
+        st.session_state.end_lat = (
+            st.session_state.clicked_lat
+        )
+
+        st.session_state.end_lon = (
+            st.session_state.clicked_lon
+        )
+
+        st.session_state.end_name = (
+            f"Map Point "
+            f"({st.session_state.clicked_lat:.4f}, "
+            f"{st.session_state.clicked_lon:.4f})"
+        )
+
+        st.success(
+            "Applied to End Point"
+        )
+
+    elif apply_click_to == "None":
+
+        st.warning(
+            "Select Start Point or End Point first."
+        )
+
+
+        # st.write(
+        #     f"Clicked: "
+        #     f"({st.session_state.clicked_lat}, "
+        #     f"{st.session_state.clicked_lon})"
+        # )        
+

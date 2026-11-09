@@ -1,0 +1,9 @@
+From,To,Transport
+Sydney,Canberra,Car
+Canberra,Melbourne,Train
+Melbourne,Devonport,Ship
+Devonport,Hobart,Car
+Hobart,Strahan,Car
+Strahan,Devonport,Car
+Devonport,Sydney,Ship
+Sydney,Los Angeles,Plane
