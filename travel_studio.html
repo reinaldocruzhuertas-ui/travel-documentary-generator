@@ -13,28 +13,58 @@
         #ui-overlay {
             position: absolute; top: 20px; left: 20px; z-index: 10;
             background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.15); width: 340px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15); width: 360px;
             max-height: 90vh; overflow-y: auto;
-            transition: opacity 0.5s ease;
+            transition: transform 0.3s ease, opacity 0.5s ease;
         }
+
+        #ui-overlay.hidden { transform: translateX(-380px); }
+
+        #toggle-btn {
+            position: absolute; top: 20px; left: 380px; z-index: 11;
+            width: 30px; height: 40px; background: rgba(255, 255, 255, 0.95);
+            border: none; border-radius: 0 8px 8px 0; box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+            cursor: pointer; font-weight: bold; font-size: 16px; color: #333;
+            display: flex; align-items: center; justify-content: center; transition: left 0.3s ease;
+        }
+        #ui-overlay.hidden + #toggle-btn { left: 0; }
+        #toggle-btn:hover { background: #0055ff; color: white; }
+        
         h1 { margin: 0 0 15px 0; font-size: 22px; color: #1a1a1a; font-weight: 800; letter-spacing: -0.5px;}
         
         .input-group { margin-bottom: 12px; }
         label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;}
-        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; transition: border 0.2s;}
+        
+        .input-row { display: flex; gap: 8px; }
+        input { flex: 1; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; transition: border 0.2s;}
         input:focus { border-color: #0055ff; }
+        
+        .pick-btn {
+            padding: 0 12px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 6px;
+            cursor: pointer; font-size: 16px; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .pick-btn:hover { background: #e0e0e0; }
+        .pick-btn.active { background: #0055ff; color: white; border-color: #0055ff; animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0,85,255, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(0,85,255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0,85,255, 0); }
+        }
+
         select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-top: 4px; outline: none;}
         
         .coord-text { font-size: 11px; color: #28a745; margin-top: 4px; display: none; font-weight: 500;}
         .coord-text.error { color: #dc3545; }
 
-        button {
+        button.add-btn {
             width: 100%; padding: 12px; background: #0055ff; color: white; 
             border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold;
             margin-top: 8px; transition: background 0.2s;
         }
-        button:hover { background: #0044cc; }
-        button:disabled { background: #e0e0e0; color: #999; cursor: not-allowed; }
+        button.add-btn:hover { background: #0044cc; }
+        button.add-btn:disabled { background: #e0e0e0; color: #999; cursor: not-allowed; }
 
         #trip-grid { margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; display: none; }
         .leg-item { 
@@ -51,6 +81,13 @@
         }
         .delete-btn:hover { background: #dc3545; color: white; }
         
+        button.play-btn {
+            width: 100%; padding: 12px; background: #28a745; color: white;
+            border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold;
+            margin-top: 15px; transition: background 0.2s; display: none;
+        }
+        button.play-btn:hover { background: #218838; }
+
         .transport-emoji { font-size: 45px; filter: drop-shadow(0px 10px 5px rgba(0,0,0,0.5)); }
     </style>
 </head>
@@ -60,39 +97,88 @@
         
         <div class="input-group">
             <label>From:</label>
-            <input type="text" id="from-input" placeholder="e.g. Sydney" onblur="validateInput('from')">
+            <div class="input-row">
+                <input type="text" id="from-input" placeholder="e.g. Sydney" onblur="validateInput('from')" onkeydown="handleTab(event, 'to-input')">
+                <button class="pick-btn" id="pick-from-btn" onclick="togglePickMode('from')" title="Pick From Location on Map">📍</button>
+            </div>
             <div id="from-coord" class="coord-text">✅ Coordinates found</div>
         </div>
         
         <div class="input-group">
             <label>To:</label>
-            <input type="text" id="to-input" placeholder="e.g. Canberra" onblur="validateInput('to')">
+            <div class="input-row">
+                <input type="text" id="to-input" placeholder="e.g. Canberra" onblur="validateInput('to')" onkeydown="handleTab(event, 'transport-select')">
+                <button class="pick-btn" id="pick-to-btn" onclick="togglePickMode('to')" title="Pick To Location on Map">📍</button>
+            </div>
             <div id="to-coord" class="coord-text">✅ Coordinates found</div>
         </div>
 
         <div class="input-group">
             <label>Transport:</label>
             <select id="transport-select">
-                <option value="🚗 Car">🚗 Car</option>
-                <option value="🚆 Train">🚆 Train</option>
-                <option value="✈️ Plane">✈️ Plane</option>
-                <option value="🚢 Ship">🚢 Ship</option>
+                <optgroup label="Ground Transport">
+                    <option value="🚶 Walking">🚶 Walking</option>
+                    <option value="🚲 Bicycle">🚲 Bicycle</option>
+                    <option value="🚗 Car">🚗 Car</option>
+                    <option value="🏍️ Motorbike">🏍️ Motorbike</option>
+                    <option value="🚌 Bus">🚌 Bus</option>
+                    <option value="🚆 Train">🚆 Train</option>
+                </optgroup>
+                <optgroup label="Animals">
+                    <option value="🐎 Horse">🐎 Horse</option>
+                    <option value="🐪 Camel">🐪 Camel</option>
+                    <option value="🫏 Donkey">🫏 Donkey</option>
+                </optgroup>
+                <optgroup label="Air Transport">
+                    <option value="✈️ Plane">✈️ Plane</option>
+                    <option value="🚁 Helicopter">🚁 Helicopter</option>
+                    <option value="🛸 Drone">🛸 Drone</option>
+                </optgroup>
+                <optgroup label="Water Transport">
+                    <option value="🚢 Ship">🚢 Ship</option>
+                    <option value="⛵ Boat">⛵ Boat</option>
+                    <option value="🏊 Swimming">🏊 Swimming</option>
+                </optgroup>
             </select>
         </div>
 
-        <button id="add-btn" onclick="addLeg()" disabled>+ Add Leg to Trip</button>
+        <button class="add-btn" id="add-btn" onclick="addLeg()" disabled>+ Add Leg to Trip</button>
 
         <div id="trip-grid">
             <label style="margin-bottom: 10px;">Your Trip:</label>
             <div id="leg-list"></div>
         </div>
 
-        <button id="play-btn" onclick="startAnimation()" style="display: none; background: #28a745; margin-top: 15px;">▶ Play Journey</button>
+        <button class="play-btn" id="play-btn" onclick="startAnimation()">▶ Play Journey</button>
     </div>
+    
+    <button id="toggle-btn" onclick="togglePanel()">&lt;</button>
     
     <div id="map"></div>
     
     <script>
+        function handleTab(event, nextElementId) {
+            if (event.key === 'Tab' && !event.shiftKey) {
+                event.preventDefault(); 
+                document.getElementById(nextElementId).focus();
+            }
+        }
+
+        let panelOpen = true;
+        function togglePanel() {
+            const panel = document.getElementById('ui-overlay');
+            const btn = document.getElementById('toggle-btn');
+            panelOpen = !panelOpen;
+            
+            if (panelOpen) {
+                panel.classList.remove('hidden');
+                btn.innerHTML = '&lt;'; 
+            } else {
+                panel.classList.add('hidden');
+                btn.innerHTML = '&gt;'; 
+            }
+        }
+
         const map = new maplibregl.Map({
             container: 'map',
             style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
@@ -107,6 +193,12 @@
         let droppedMarkers = []; 
         let animationInterval = null;
         let tempMarkers = []; 
+        
+        // NEW: Track the specific markers for the From/To pins
+        let fromMarker = null;
+        let toMarker = null;
+        
+        let pickMode = null; 
 
         map.on('load', () => {
             map.addSource('terrain', { type: 'raster-dem', url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json', tileSize: 256 });
@@ -120,7 +212,67 @@
             });
         });
 
+        map.on('click', (e) => {
+            if (!pickMode) return; 
+            
+            const lng = e.lngLat.lng;
+            const lat = e.lngLat.lat;
+            const coordString = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            
+            if (pickMode === 'from') {
+                document.getElementById('from-input').value = coordString;
+                fromCoord = [lng, lat];
+                document.getElementById('from-coord').innerText = `✅ Picked: ${coordString}`;
+                document.getElementById('from-coord').style.display = 'block';
+                document.getElementById('from-coord').className = 'coord-text';
+                
+                // THE FIX: Remove the old From marker if it exists
+                if (fromMarker) fromMarker.remove();
+                fromMarker = new maplibregl.Marker({color: 'green'}).setLngLat([lng, lat]).addTo(map);
+                
+            } else if (pickMode === 'to') {
+                document.getElementById('to-input').value = coordString;
+                toCoord = [lng, lat];
+                document.getElementById('to-coord').innerText = `✅ Picked: ${coordString}`;
+                document.getElementById('to-coord').style.display = 'block';
+                document.getElementById('to-coord').className = 'coord-text';
+                
+                // THE FIX: Remove the old To marker if it exists
+                if (toMarker) toMarker.remove();
+                toMarker = new maplibregl.Marker({color: 'red'}).setLngLat([lng, lat]).addTo(map);
+            }
+            
+            document.getElementById('add-btn').disabled = !(fromCoord && toCoord);
+        });
+
+        function togglePickMode(type) {
+            if (pickMode === type) type = null;
+            pickMode = type;
+            
+            const fromBtn = document.getElementById('pick-from-btn');
+            const toBtn = document.getElementById('pick-to-btn');
+            
+            fromBtn.classList.remove('active');
+            toBtn.classList.remove('active');
+            
+            if (type === 'from') {
+                fromBtn.classList.add('active');
+                document.getElementById('from-coord').innerText = 'Click on the map to pick...';
+                document.getElementById('from-coord').style.display = 'block';
+            } else if (type === 'to') {
+                toBtn.classList.add('active');
+                document.getElementById('to-coord').innerText = 'Click on the map to pick...';
+                document.getElementById('to-coord').style.display = 'block';
+            }
+        }
+
         async function getCoordinates(placeName) {
+            const coordRegex = /^(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)$/;
+            if (coordRegex.test(placeName)) {
+                const parts = placeName.split(',');
+                return [parseFloat(parts[1].trim()), parseFloat(parts[0].trim())]; 
+            }
+            
             if(!placeName) return null;
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(placeName)}&limit=1`;
             const response = await fetch(url, { headers: { 'User-Agent': 'TravelApp/1.0' } });
@@ -132,10 +284,18 @@
         }
 
         async function validateInput(type) {
+            if (pickMode === type) {
+                togglePickMode(null);
+                return; 
+            }
+            
             const input = document.getElementById(type + '-input').value;
             const coordDiv = document.getElementById(type + '-coord');
             if (!input) return;
             
+            const coordRegex = /^(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)$/;
+            if (coordRegex.test(input)) return; 
+
             coordDiv.style.display = 'block';
             coordDiv.className = 'coord-text';
             coordDiv.innerText = 'Searching...';
@@ -143,12 +303,16 @@
             const coord = await getCoordinates(input);
             
             if (coord) {
-                if (type === 'from') fromCoord = coord;
-                else toCoord = coord;
+                if (type === 'from') {
+                    fromCoord = coord;
+                    if (fromMarker) fromMarker.remove();
+                    fromMarker = new maplibregl.Marker({color: 'green'}).setLngLat(coord).addTo(map);
+                } else {
+                    toCoord = coord;
+                    if (toMarker) toMarker.remove();
+                    toMarker = new maplibregl.Marker({color: 'red'}).setLngLat(coord).addTo(map);
+                }
                 coordDiv.innerText = `✅ ${coord[1].toFixed(4)}, ${coord[0].toFixed(4)}`;
-                
-                const marker = new maplibregl.Marker({color: type === 'from' ? 'green' : 'red'}).setLngLat(coord).addTo(map);
-                tempMarkers.push(marker);
             } else {
                 if (type === 'from') fromCoord = null;
                 else toCoord = null;
@@ -173,11 +337,21 @@
 
             document.getElementById('from-input').value = toName;
             fromCoord = toCoord;
+            
+            // Transfer the "To" marker to become the new "From" marker
+            if (toMarker) {
+                toMarker.remove(); // Remove red marker
+                fromMarker = new maplibregl.Marker({color: 'green'}).setLngLat(toCoord).addTo(map); // Add green marker
+                toMarker = null; // Reset to marker
+            }
+            
             document.getElementById('from-coord').innerText = `✅ ${fromCoord[1].toFixed(4)}, ${fromCoord[0].toFixed(4)}`;
             
             document.getElementById('to-input').value = '';
             document.getElementById('to-coord').style.display = 'none';
             toCoord = null;
+            
+            togglePickMode(null); 
 
             renderTripGrid();
         }
@@ -192,8 +366,14 @@
             tripLegs.forEach((leg, index) => {
                 const div = document.createElement('div');
                 div.className = 'leg-item';
+                
+                let fromLabel = leg.fromName;
+                let toLabel = leg.toName;
+                if (fromLabel.includes(',')) fromLabel = '📍 Picked';
+                if (toLabel.includes(',')) toLabel = '📍 Picked';
+
                 div.innerHTML = `
-                    <div class="leg-text">${leg.transport.split(' ')[0]} ${leg.fromName} → ${leg.toName}</div>
+                    <div class="leg-text">${leg.transport.split(' ')[0]} ${fromLabel} → ${toLabel}</div>
                     <button class="delete-btn" onclick="removeLeg(${index})">✖</button>
                 `;
                 list.appendChild(div);
@@ -208,9 +388,8 @@
             renderTripGrid();
         }
 
-        // --- THE NEW MATH FUNCTIONS ---
         function getDistanceKm(coord1, coord2) {
-            const R = 6371; // Earth radius in km
+            const R = 6371; 
             const lat1 = coord1[1] * Math.PI / 180;
             const lat2 = coord2[1] * Math.PI / 180;
             let deltaLon = coord2[0] - coord1[0];
@@ -224,19 +403,16 @@
         }
 
         function getCameraSettings(distanceKm) {
-            // Your Custom Formula
-            let zoom = Math.max(1, Math.min(24, 21.43 - 1.495 * Math.log2(distanceKm)));
+            const safeDist = Math.max(0.1, distanceKm); 
+            let zoom = 21.43 - 1.495 * Math.log2(safeDist);
+            zoom = Math.max(2, Math.min(16, zoom)); 
             
-            // Dynamic Pitch based on distance
             let pitch = 0;
-            if (distanceKm < 50) pitch = 55;        // Local (Street level)
-            else if (distanceKm < 150) pitch = 50;  // Short regional
-            else if (distanceKm < 1000) pitch = 40; // Medium regional
-            else if (distanceKm < 3000) pitch = 20; // Country level
-            else pitch = 0;                         // Continental / Ocean
-            
-            // Cap max zoom so it doesn't look pixelated
-            if (zoom > 16) zoom = 16;
+            if (distanceKm < 50) pitch = 55;        
+            else if (distanceKm < 150) pitch = 50;  
+            else if (distanceKm < 1000) pitch = 40; 
+            else if (distanceKm < 3000) pitch = 20; 
+            else pitch = 0;                         
             
             return { zoom, pitch };
         }
@@ -246,6 +422,9 @@
             
             if (animationInterval) clearInterval(animationInterval);
             
+            // Clear ALL markers before starting the animation
+            if (fromMarker) fromMarker.remove();
+            if (toMarker) toMarker.remove();
             tempMarkers.forEach(marker => marker.remove());
             tempMarkers = []; 
 
@@ -262,10 +441,10 @@
                 features: []
             });
 
-            document.getElementById('play-btn').style.display = 'none';
-            document.getElementById('ui-overlay').style.opacity = '0.3'; 
-            document.getElementById('ui-overlay').style.pointerEvents = 'none';
+            if (panelOpen) togglePanel();
 
+            document.getElementById('play-btn').style.display = 'none';
+            
             const frames = [];
             const STEPS = 100; 
 
@@ -284,7 +463,6 @@
                 const isLongHaul = Math.abs(deltaLon) > 20; 
 
                 if (isLongHaul) {
-                    // Great Circle for ANY long-haul transport
                     const lat1 = startLat * Math.PI / 180, lon1 = startLon * Math.PI / 180;
                     const lat2 = endLat * Math.PI / 180, lon2 = endLon * Math.PI / 180;
                     const d = 2 * Math.asin(Math.sqrt(Math.pow(Math.sin((lat2 - lat1) / 2), 2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin((deltaLon * Math.PI / 180) / 2), 2)));
@@ -307,7 +485,6 @@
                         });
                     }
                 } else {
-                    // Local routing (Linear interpolation)
                     for (let i = 0; i <= STEPS; i++) {
                         const f = i / STEPS;
                         frames.push({
@@ -345,8 +522,6 @@
             animationInterval = setInterval(() => {
                 if (currentFrame >= frames.length) {
                     clearInterval(animationInterval);
-                    document.getElementById('ui-overlay').style.opacity = '1';
-                    document.getElementById('ui-overlay').style.pointerEvents = 'auto';
                     document.getElementById('play-btn').style.display = 'block';
                     document.getElementById('play-btn').innerText = "↺ Replay Journey";
                     return;
