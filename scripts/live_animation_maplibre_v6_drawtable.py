@@ -113,7 +113,6 @@ html_content = """
         .action-btn.play { background: #dcfce7; color: #15803d; }
         .action-btn.play:hover { background: #15803d; color: white; }
 
-        /* Custom Tooltip */
         .action-btn[data-tooltip]:hover::after {
             content: attr(data-tooltip);
             position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
@@ -131,12 +130,11 @@ html_content = """
         .transport-emoji { font-size: 45px; filter: drop-shadow(0px 10px 5px rgba(0,0,0,0.5)); }
 
         /* --- DRAWING MODE UI --- */
-
         #draw-toolbar {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
             background: rgba(255, 255, 255, 0.95); padding: 10px 20px; border-radius: 30px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 20; 
-            display: none; /* <-- ONLY this, remove the 'display: flex' that was overriding it */
+            display: none;
             align-items: center; gap: 15px; pointer-events: auto;
         }        
 
@@ -145,6 +143,23 @@ html_content = """
         }
         #draw-toolbar .cancel-btn { background: #ffe5e5; color: #dc3545; }
         #draw-toolbar .finish-btn { background: #28a745; color: white; }
+
+        /* --- PLAYBACK CONTROLS --- */
+        #playback-controls {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95); padding: 10px 20px; border-radius: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 20; 
+            display: none;
+            align-items: center; gap: 15px; pointer-events: auto;
+        }
+        
+        #playback-controls button {
+            padding: 8px 15px; border-radius: 20px; border: none; font-weight: bold; cursor: pointer;
+            background: #e9ecef; color: #333; transition: background 0.2s;
+        }
+        #playback-controls button:hover { background: #dee2e6; }
+        #playback-controls .pause-btn { background: #ffc107; color: #000; }
+        #playback-controls .pause-btn:hover { background: #e0a800; }
     </style>
 </head>
 <body>
@@ -217,6 +232,7 @@ html_content = """
         </div>
 
         <button class="play-btn" id="play-btn" onclick="startAnimation()">▶ Play Full Journey</button>
+        <button onclick="startNewJourney(true)" id="new-journey-btn" style="display: none; width: 100%; padding: 12px; background: transparent; color: #999; border: 1px solid #eee; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: all 0.2s;">✨ Start New Journey</button>
     </div>
     
     <button id="toggle-btn" onclick="togglePanel()">&lt;</button>
@@ -226,8 +242,30 @@ html_content = """
         <button class="undo-btn" onclick="undoLastPoint()" style="background: #f0f0f0; color: #333;">↩ Undo</button>
         <button class="finish-btn" onclick="finishDrawing()">✅ Save Route</button>
     </div>    
-    
+
+    <!-- Playback Controls Panel -->
+    <div id="playback-controls">
+        <button id="pause-btn" class="pause-btn" onclick="togglePause()">⏸ Pause</button>
+        <button id="speed-btn" onclick="cycleSpeed()">1x Speed</button>
+    </div>
+
+    <!-- Welcome Back Modal -->
+    <div id="welcome-modal" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); text-align: center; max-width: 400px;">
+            <h2 style="margin: 0 0 10px 0; font-size: 24px; color: #1a1a1a;">🌍 Welcome back!</h2>
+            <p style="margin: 0 0 20px 0; color: #666; font-size: 15px; line-height: 1.5;">
+                You have an unfinished journey with <strong id="modal-leg-count">0</strong> legs.<br>
+                Would you like to continue where you left off, or start fresh?
+            </p>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button onclick="continueJourney()" style="padding: 12px 20px; background: #28a745; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">▶ Continue Journey</button>
+                <button onclick="startNewJourney()" style="padding: 12px 20px; background: #f0f0f0; color: #333; border: none; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">✨ Start New Journey</button>
+            </div>
+        </div>
+    </div>
+
     <div id="map"></div>
+
     <script>
         function handleTab(event, nextElementId) {
             if (event.key === 'Tab' && !event.shiftKey) {
@@ -275,7 +313,102 @@ html_content = """
         let drawMarkers = [];
         let editingLegIndex = null; 
 
+        // --- PLAYBACK CONTROL VARIABLES ---
+        let currentFrames = [];
+        let currentFrameIndex = 0;
+        let isPaused = false;
+        let currentSpeed = 1; 
+        let currentSegments = [[]];
+        let currentActiveEl = null;
+
+        // --- LOCAL STORAGE LOGIC ---
+        function saveTripToLocalStorage() {
+            try {
+                localStorage.setItem('travel_studio_trip', JSON.stringify(tripLegs));
+            } catch (e) {
+                console.warn("Could not save to localStorage", e);
+            }
+        }
+
+        function loadTripFromLocalStorage() {
+            try {
+                const saved = localStorage.getItem('travel_studio_trip');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        tripLegs = parsed;
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not load from localStorage", e);
+            }
+            return false;
+        }
+
+        function continueJourney() {
+            document.getElementById('welcome-modal').style.display = 'none';
+            renderTripGrid();
+        }
+
+        function startNewJourney(confirmFirst = false) {
+            if (confirmFirst) {
+                if (!confirm("Are you sure? This will permanently delete your current trip.")) {
+                    return;
+                }
+            }
+            
+            tripLegs = [];
+            localStorage.removeItem('travel_studio_trip');
+            renderTripGrid();
+            document.getElementById('welcome-modal').style.display = 'none';
+            
+            if (activeMarker) activeMarker.remove();
+            droppedMarkers.forEach(m => m.remove());
+            droppedMarkers = [];
+            map.getSource('active-route').setData({ type: 'FeatureCollection', features: [] });
+        }
+
+        // --- PLAYBACK CONTROLS LOGIC ---
+        function cycleSpeed() {
+            if (currentSpeed === 1) currentSpeed = 2;
+            else if (currentSpeed === 2) currentSpeed = 4;
+            else if (currentSpeed === 4) currentSpeed = 0.5;
+            else currentSpeed = 1;
+            
+            document.getElementById('speed-btn').innerText = currentSpeed + 'x Speed';
+            
+            // If currently playing, restart the interval with new speed
+            if (!isPaused && animationInterval) {
+                clearInterval(animationInterval);
+                runAnimationLoop();
+            }
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const btn = document.getElementById('pause-btn');
+            
+            if (isPaused) {
+                btn.innerText = "▶ Resume";
+                clearInterval(animationInterval);
+            } else {
+                btn.innerText = "⏸ Pause";
+                runAnimationLoop();
+            }
+        }
+
+        // --- MAP SETUP ---
         map.on('load', () => {
+            if (loadTripFromLocalStorage()) {
+                if (tripLegs.length >= 2) {
+                    document.getElementById('modal-leg-count').innerText = tripLegs.length;
+                    document.getElementById('welcome-modal').style.display = 'flex';
+                } else {
+                    renderTripGrid();
+                }
+            }
+
             map.addSource('terrain', { type: 'raster-dem', url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json', tileSize: 256 });
             map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
             
@@ -364,7 +497,6 @@ html_content = """
             map.getCanvas().style.cursor = 'crosshair';
         }
 
-
         function cancelDrawing() {
             isDrawing = false;
             editingLegIndex = null;
@@ -381,16 +513,13 @@ html_content = """
         function undoLastPoint() {
             if (drawnCoords.length === 0) return;
             
-            // Remove the last coordinate
             drawnCoords.pop();
             
-            // Remove the last visual marker
             if (drawMarkers.length > 0) {
                 const lastMarker = drawMarkers.pop();
                 lastMarker.remove();
             }
             
-            // Update the dashed red line
             map.getSource('drawn-route').setData({
                 type: 'Feature',
                 geometry: { type: 'LineString', coordinates: drawnCoords }
@@ -404,20 +533,21 @@ html_content = """
             }
 
             const oldLeg = tripLegs[editingLegIndex];
-            const transport = oldLeg.transport; // Keep the transport from the original row
+            const transport = oldLeg.transport; 
             
             const newLeg = {
                 type: 'drawn',
                 transport: transport,
                 coordinates: [...drawnCoords],
-                fromName: oldLeg.fromName, // PRESERVE the original names
-                toName: oldLeg.toName      // PRESERVE the original names
+                fromName: oldLeg.fromName, 
+                toName: oldLeg.toName      
             };
 
             tripLegs[editingLegIndex] = newLeg;
 
             cancelDrawing(); 
             renderTripGrid();
+            saveTripToLocalStorage();
         }        
 
         function togglePickMode(type) {
@@ -529,13 +659,16 @@ html_content = """
             togglePickMode(null); 
 
             renderTripGrid();
+            saveTripToLocalStorage();
         }
 
         function renderTripGrid() {
             const grid = document.getElementById('trip-grid');
             const list = document.getElementById('leg-list');
+            const newBtn = document.getElementById('new-journey-btn');
             
             grid.style.display = tripLegs.length > 0 ? 'block' : 'none';
+            newBtn.style.display = tripLegs.length > 0 ? 'block' : 'none';
             list.innerHTML = '';
             
             tripLegs.forEach((leg, index) => {
@@ -549,7 +682,6 @@ html_content = """
                     let toLabel = leg.toName.includes(',') ? '📍 Picked' : leg.toName;
                     routeLabel = `${fromLabel} → ${toLabel}`;
                 } else {
-                    // For drawn routes, show the original name but add a pencil icon
                     let fromLabel = leg.fromName.includes(',') ? '📍 Picked' : leg.fromName;
                     let toLabel = leg.toName.includes(',') ? '📍 Picked' : leg.toName;
                     routeLabel = `✏️ ${fromLabel} → ${toLabel}`;
@@ -578,12 +710,14 @@ html_content = """
         function removeLeg(index) {
             tripLegs.splice(index, 1);
             renderTripGrid();
+            saveTripToLocalStorage();
         }
 
         function playSingleLeg(index) {
             const tempArray = [tripLegs[index]];
             startAnimation(tempArray);
         }
+
         function getDistanceKm(coord1, coord2) {
             const R = 6371; 
             const lat1 = coord1[1] * Math.PI / 180;
@@ -613,12 +747,94 @@ html_content = """
             return { zoom, pitch };
         }
 
+        function runAnimationLoop() {
+            if (isPaused) return;
+
+            // Speed mapping: 40ms is the base speed at 1x
+            const intervalMs = 40 / currentSpeed;
+
+            animationInterval = setInterval(() => {
+                if (currentFrameIndex >= currentFrames.length) {
+                    clearInterval(animationInterval);
+                    document.getElementById('playback-controls').style.display = 'none';
+                    document.getElementById('play-btn').style.display = 'block';
+                    document.getElementById('play-btn').innerText = "↺ Replay Journey";
+                    isPaused = false;
+                    document.getElementById('pause-btn').innerText = "⏸ Pause";
+                    return;
+                }
+
+                const frame = currentFrames[currentFrameIndex];
+                
+                if (!frame.isOpening) {
+                    if (frame.isLegStart) {
+                        if (activeMarker) {
+                            droppedMarkers.push(activeMarker);
+                        }
+                        
+                        const newEl = document.createElement('div');
+                        newEl.className = 'transport-emoji';
+                        newEl.innerText = frame.icon;
+                        activeMarker = new maplibregl.Marker({ element: newEl, anchor: 'center' }).setLngLat([frame.lon, frame.lat]).addTo(map);
+                        currentActiveEl = newEl;
+
+                        currentSegments.push([[frame.lon, frame.lat]]);
+                    }
+                    
+                    if (activeMarker) {
+                        activeMarker.setLngLat([frame.lon, frame.lat]);
+                        if (currentActiveEl) currentActiveEl.innerText = frame.icon;
+                    }
+
+                    const curSeg = currentSegments[currentSegments.length - 1];
+                    const lastCoord = curSeg[curSeg.length - 1];
+                    const newCoord = [frame.lon, frame.lat];
+
+                    if (lastCoord && Math.abs(newCoord[0] - lastCoord[0]) > 180) {
+                        currentSegments.push([newCoord]);
+                    } else {
+                        curSeg.push(newCoord);
+                    }
+
+                    map.getSource('active-route').setData({
+                        type: 'FeatureCollection',
+                        features: currentSegments.map(seg => ({
+                            type: 'Feature',
+                            geometry: { type: 'LineString', coordinates: seg }
+                        }))
+                    });
+
+                } else {
+                    if (!activeMarker) {
+                        const el = document.createElement('div');
+                        el.className = 'transport-emoji';
+                        el.innerText = frame.icon;
+                        el.style.display = 'none';
+                        activeMarker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([frame.lon, frame.lat]).addTo(map);
+                        currentActiveEl = el;
+                    }
+                }
+
+                map.jumpTo({
+                    center: [frame.lon, frame.lat],
+                    pitch: frame.pitch,
+                    zoom: frame.zoom,
+                    bearing: 0
+                });
+
+                currentFrameIndex++;
+            }, intervalMs);
+        }
+
         function startAnimation(customTripArray = null) {
             const legsToPlay = customTripArray || tripLegs;
             if (legsToPlay.length === 0) return;
             
             if (animationInterval) clearInterval(animationInterval);
+            isPaused = false;
+            document.getElementById('pause-btn').innerText = "⏸ Pause";
             
+            // Reset state
             if (fromMarker) fromMarker.remove();
             if (toMarker) toMarker.remove();
             tempMarkers.forEach(marker => marker.remove());
@@ -642,8 +858,9 @@ html_content = """
             if (panelOpen) togglePanel();
 
             document.getElementById('play-btn').style.display = 'none';
+            document.getElementById('playback-controls').style.display = 'flex';
             
-            const frames = [];
+            currentFrames = [];
             const STEPS = 100; 
 
             legsToPlay.forEach((leg, legIndex) => {
@@ -665,7 +882,7 @@ html_content = """
                         
                         for (let s = 0; s <= stepsPerSegment; s++) {
                             const f = s / stepsPerSegment;
-                            frames.push({
+                            currentFrames.push({
                                 lat: start[1] + f * (end[1] - start[1]),
                                 lon: start[0] + f * (end[0] - start[0]),
                                 icon: icon,
@@ -705,7 +922,7 @@ html_content = """
                             while (lon > 180) lon -= 360;
                             while (lon < -180) lon += 360;
                             
-                            frames.push({ 
+                            currentFrames.push({ 
                                 lat: lat, lon: lon, icon: icon, zoom: cam.zoom, pitch: cam.pitch,
                                 isLegStart: (i === 0), legIndex: legIndex
                             });
@@ -713,7 +930,7 @@ html_content = """
                     } else {
                         for (let i = 0; i <= STEPS; i++) {
                             const f = i / STEPS;
-                            frames.push({
+                            currentFrames.push({
                                 lat: startLat + f * (endLat - startLat),
                                 lon: startLon + f * (endLon - startLon),
                                 icon: icon,
@@ -745,7 +962,7 @@ html_content = """
             for (let i = 0; i <= openingFrames; i++) {
                 const p = i / openingFrames;
                 const smoothP = p * p * (3 - 2 * p); 
-                frames.unshift({
+                currentFrames.unshift({
                     lat: startCoord[1], lon: startCoord[0], icon: legsToPlay[0].transport.split(' ')[0],
                     zoom: 1 + smoothP * (firstCam.zoom - 1), 
                     pitch: smoothP * firstCam.pitch,
@@ -753,78 +970,11 @@ html_content = """
                 });
             }
 
-            let currentFrame = 0;
-            let segments = [[]]; 
-            let activeEl = null; 
+            currentFrameIndex = 0;
+            currentSegments = [[]]; 
+            currentActiveEl = null; 
 
-            animationInterval = setInterval(() => {
-                if (currentFrame >= frames.length) {
-                    clearInterval(animationInterval);
-                    document.getElementById('play-btn').style.display = 'block';
-                    document.getElementById('play-btn').innerText = "↺ Replay Journey";
-                    return;
-                }
-
-                const frame = frames[currentFrame];
-                
-                if (!frame.isOpening) {
-                    if (frame.isLegStart) {
-                        if (activeMarker) {
-                            droppedMarkers.push(activeMarker);
-                        }
-                        
-                        const newEl = document.createElement('div');
-                        newEl.className = 'transport-emoji';
-                        newEl.innerText = frame.icon;
-                        activeMarker = new maplibregl.Marker({ element: newEl, anchor: 'center' }).setLngLat([frame.lon, frame.lat]).addTo(map);
-                        activeEl = newEl;
-
-                        segments.push([[frame.lon, frame.lat]]);
-                    }
-                    
-                    if (activeMarker) {
-                        activeMarker.setLngLat([frame.lon, frame.lat]);
-                        if (activeEl) activeEl.innerText = frame.icon;
-                    }
-
-                    const currentSegment = segments[segments.length - 1];
-                    const lastCoord = currentSegment[currentSegment.length - 1];
-                    const newCoord = [frame.lon, frame.lat];
-
-                    if (lastCoord && Math.abs(newCoord[0] - lastCoord[0]) > 180) {
-                        segments.push([newCoord]);
-                    } else {
-                        currentSegment.push(newCoord);
-                    }
-
-                    map.getSource('active-route').setData({
-                        type: 'FeatureCollection',
-                        features: segments.map(seg => ({
-                            type: 'Feature',
-                            geometry: { type: 'LineString', coordinates: seg }
-                        }))
-                    });
-
-                } else {
-                    if (!activeMarker) {
-                        const el = document.createElement('div');
-                        el.className = 'transport-emoji';
-                        el.innerText = frame.icon;
-                        el.style.display = 'none';
-                        activeMarker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([frame.lon, frame.lat]).addTo(map);
-                        activeEl = el;
-                    }
-                }
-
-                map.jumpTo({
-                    center: [frame.lon, frame.lat],
-                    pitch: frame.pitch,
-                    zoom: frame.zoom,
-                    bearing: 0
-                });
-
-                currentFrame++;
-            }, 40); 
+            runAnimationLoop();
         }
     </script>
 </body>
